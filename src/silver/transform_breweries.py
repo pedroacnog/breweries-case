@@ -3,7 +3,7 @@ import boto3
 import logging
 from unidecode import unidecode 
 from pyspark.sql import SparkSession
-from pyspark.sql.types import DoubleType, StringType
+from pyspark.sql.types import DoubleType, StringType, StructType, StructField
 from pyspark.sql.functions import col, lower, concat_ws, trim, udf
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -94,22 +94,38 @@ def main():
 
     #print(df_final.select("country", "state").distinct().show(200))
 
+    # Reorde columns and apply schema explicitly
+    silver_schema = StructType([
+        StructField("id", StringType(), True),
+        StructField("name", StringType(), True),
+        StructField("brewery_type", StringType(), True),
+        StructField("active_status", StringType(), True),
+        StructField("address", StringType(), True),
+        StructField("city", StringType(), True),
+        StructField("state", StringType(), True),
+        StructField("postal_code", StringType(), True),
+        StructField("country", StringType(), True),
+        StructField("latitude", DoubleType(), True),
+        StructField("longitude", DoubleType(), True),
+    ])
+
+    df_final = spark.createDataFrame(df_final.select(
+        "id",
+        "name",
+        "brewery_type",
+        "active_status",
+        "address",
+        "city",
+        "state",
+        "postal_code",
+        "country",
+        "latitude",
+        "longitude"
+    ).rdd, silver_schema)
+    
     logging.info("Writing to Silver path with partitioning")
     
-    df_final.select(
-            "id",
-            "name",
-            "brewery_type",
-            "active_status",
-            "address",
-            "city",
-            "state",
-            "postal_code",
-            "country",
-            "latitude",
-            "longitude"
-        ) \
-        .write \
+    df_final.write \
         .mode("overwrite") \
         .partitionBy("country", "state") \
         .parquet(output_path)

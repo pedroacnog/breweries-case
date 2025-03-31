@@ -2,3 +2,4 @@ requests
 boto3
 pyspark
 pytest
+unidecode

@@ -1,3 +1,17 @@
+x-airflow-common-env: &airflow-common-env
+  MINIO_ENDPOINT: "http://minio:9000"
+  MINIO_ACCESS_KEY: "admin"
+  MINIO_SECRET_KEY: "admin123"
+  BUCKET_BRONZE: "bronze"
+  BUCKET_SILVER: "silver"
+  BUCKET_GOLD: "gold"
+  API_URL: "https://api.openbrewerydb.org/breweries"
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__WEBSERVER__SECRET_KEY: "secretkey_tst"
+
+
 services:
   minio:
     image: minio/minio:latest
@@ -12,12 +26,25 @@ services:
     volumes:
       - minio-data:/data
 
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   airflow:
     build:
       context: .
       dockerfile: ./docker/Dockerfile
     container_name: airflow
     depends_on:
+      - postgres
       - minio
     ports:
       - "8080:8080"
@@ -25,11 +52,32 @@ services:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
       - ./tests:/opt/airflow/tests
+      - ./logs:/opt/airflow/logs 
+
     environment:
-      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-    command: bash -c "airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com && airflow webserver"
+      <<: *airflow-common-env
+    command: bash -c "
+      airflow db init &&
+      airflow users create --username airflow --password airflow --firstname airflow --lastname airflow --role Admin --email airflow@example.com &&
+      airflow webserver"
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+    container_name: airflow-scheduler
+    depends_on:
+      - airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./tests:/opt/airflow/tests
+      - ./logs:/opt/airflow/logs 
+
+    environment:
+      <<: *airflow-common-env
+    command: airflow scheduler
 
 volumes:
   minio-data:
+  postgres-data:
